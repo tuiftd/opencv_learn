@@ -63,7 +63,47 @@ def train_knn_classifier(eigenvectors_list, labels_list):
     knn.fit(eigenvectors_list, labels_list)
     return knn
 
-
+def display_comparison(target_image, predicted_template_name, template_dir):
+    """显示目标图像和预测的模板图像的对比"""
+    # 读取预测的模板图像
+    template_path = os.path.join(template_dir, predicted_template_name)
+    template_image = cv2.imread(template_path)
+    
+    if template_image is None:
+        print(f"无法读取模板图像: {template_path}")
+        return
+    
+    # 调整图像大小使其一致（可选）
+    target_height, target_width = target_image.shape[:2]
+    template_height, template_width = template_image.shape[:2]
+    
+    # 统一高度，按比例调整宽度
+    unified_height = max(target_height, template_height)
+    
+    # 调整目标图像大小
+    target_aspect = target_width / target_height
+    new_target_width = int(unified_height * target_aspect)
+    target_resized = cv2.resize(target_image, (new_target_width, unified_height))
+    
+    # 调整模板图像大小
+    template_aspect = template_width / template_height
+    new_template_width = int(unified_height * template_aspect)
+    template_resized = cv2.resize(template_image, (new_template_width, unified_height))
+    
+    # 水平拼接两张图像
+    combined_image = np.hstack((target_resized, template_resized))
+    
+    # 添加文字标签
+    cv2.putText(combined_image, "Target", (10, 30), 
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    cv2.putText(combined_image, "Template", 
+                (new_target_width + 10, 30), 
+                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+    
+    # 显示结果
+    cv2.imshow("KNN Classification Result", combined_image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 def main():
     img_dir = r"model_img"
     # 获取模板图像的特征向量
@@ -80,7 +120,7 @@ def main():
     #     json.dump({"eigenvectors": eigenvectors, "labels": labels}, f)
 
     print("KNN classifier trained")
-    img_path = r"model_img\moban_4.jpg"
+    img_path = r"git_me\test5.bmp"
     test_image = cv2.imread(img_path)
     # gray = cv2.cvtColor(test_image, cv2.COLOR_BGR2GRAY)
     test_feature_vector = get_eigenvector(test_image, edge_processor_obj=None)
@@ -88,5 +128,9 @@ def main():
     # 使用KNN分类器进行预测
     predicted_label = knn_classifier.predict([test_feature_vector])
     print("Predicted label:", predicted_label)
+    #合并指向的目标和预测出来的模板图像显示
+    display_comparison(test_image, predicted_label[0], img_dir)
+
+
 if __name__ == "__main__":
     main()
