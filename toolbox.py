@@ -9,7 +9,14 @@ import matplotlib.pyplot as plt
 
 #边缘处理
 class EdgeProcessorTool:
-    """一个用来处理边缘的工具类，可选是否亮于背景，返回全部轮廓还是最外层轮廓，输入为"""
+    """一个用来处理边缘的工具类，可选是否亮于背景，返回全部轮廓还是最外层轮廓，输入图像,初始化时可选polar和outer参数"""
+    # 类常量
+    MIN_CONTOUR_POINTS = 5
+    FRAME_RATIO_THRESHOLD = 0.9
+    OTSU_MULTIPLIER_HIGH = 1.5
+    OTSU_MULTIPLIER_LOW = 0.5
+    DILATE_KERNEL_SIZE = (5, 5)
+    ERODE_KERNEL_SIZE = (3, 3)
     def __init__(self,polar = "light", outer = True):
         polar_dict = {
             "light": cv2.THRESH_BINARY,  # 亮于背景
@@ -20,11 +27,19 @@ class EdgeProcessorTool:
             False: cv2.RETR_LIST,     # 返回所有轮廓
         }
         self.polar = polar_dict[polar]
-        self.outer = outer_dict[outer] 
-
+        self.outer = outer_dict[outer]
+        self.otsu_multiplier_high = self.OTSU_MULTIPLIER_HIGH 
+        self.otsu_multiplier_low = self.OTSU_MULTIPLIER_LOW 
+        self.min_contour_points = self.MIN_CONTOUR_POINTS
+        self.dilate_kernel_size = self.DILATE_KERNEL_SIZE
+        self.erode_kernel_size = self.ERODE_KERNEL_SIZE
+        self.frame_ratio_threshold = self.FRAME_RATIO_THRESHOLD
+        #初始化膨胀和腐蚀的kernel
+        self.kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.dilate_kernel_size)
+        self.kernel_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.erode_kernel_size)
     def _process_to_b(self, image):
         """处理图像到二值图"""
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) 
         #区域自适应阈值处理
         binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, self.polar, 11, 2)
         return binary,gray
@@ -37,12 +52,12 @@ class EdgeProcessorTool:
         mask = np.zeros(canny_img.shape, dtype=np.uint8)
         contours_filtered = []
         for contour in contours:
-            if len(contour) < 5:
+            if len(contour) < self.min_contour_points:
                 continue
             #计算轮廓的最小矩形框，与坐标平行的bbox
             x, y, w, h = cv2.boundingRect(contour)
             #如果这个框的长宽与原图相似，则认为框住了整个图像
-            if w / width > 0.9 and h / height > 0.9: 
+            if w / width > self.frame_ratio_threshold and h / height > self.frame_ratio_threshold: 
                 continue
             contours_filtered.append(contour)
         #筛选最大的轮廓
@@ -63,9 +78,10 @@ class EdgeProcessorTool:
         cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
         bbox = (x, y, w, h)
         #计算轮廓的质心
-        M = cv2.moments(mask)
+        M = cv2.moments(contour)
         if M["m00"] == 0:
             cx, cy = 0, 0
+            theta = 0
         else:
             cx = int(M["m10"] / M["m00"])
             cy = int(M["m01"] / M["m00"])
@@ -80,8 +96,34 @@ class EdgeProcessorTool:
             theta = 0
 
         return contour, center, theta, shape_wh, bbox, mask
+    
+    def _process_contour(self, contour,gray, x, y, w, h):
+        """处理轮廓，返回膨胀腐蚀处理过的canny图像"""
+        #框出原图
+        cut_image = gray[y:y+h, x:x+w]
+        #进行otsu二值化处理，获取分割阈值
+        retval,_ = cv2.threshold(cut_image, 0, 255, self.polar + cv2.THRESH_OTSU)
+        max_thresh = min(int(retval * self.otsu_multiplier_high), 255)
+        min_thresh = max(int(retval * self.otsu_multiplier_low), 0)
+        canny_img = cv2.Canny(cut_image, min_thresh, max_thresh)
+        #膨胀腐蚀处理
+        canny_img = cv2.dilate(canny_img, self.kernel_dilate, iterations=1)
+        canny_img = cv2.erode(canny_img, self.kernel_erode, iterations=1)
+        #贴回原图
+        return canny_img
+    def _empty_result(self):
+        """返回空结果"""
+        return {
+            "contours": [], "centers": [], "thetas": [], 
+            "shapes": [], "bboxes": [], 
+            "mask": np.zeros((1, 1), dtype=np.uint8)
+        }
     def get_contours_image(self, image):
-        binary, gray = self._process_to_b(image)
+        try:
+            binary, gray = self._process_to_b(image)
+        except Exception as e:
+            print(f"Error processing image to binary: {e}")
+            return self._empty_result()
         """返回筛选过的bbox，最小轮廓的外接矩形，膨胀腐蚀处理过的canny全幅图像，根据canny抽取的所有轮廓点"""
         contours, _ = cv2.findContours(binary, self.outer, cv2.CHAIN_APPROX_SIMPLE)
         height, width = binary.shape[:2]
@@ -91,38 +133,28 @@ class EdgeProcessorTool:
         theta_list = []
         shape_list = []
         bbox_list = []
-        for contour in contours:
-            if len(contour) < 5:
+        temp_mask = np.zeros(gray.shape, np.uint8)
+        for original_contour in contours:
+            if len(original_contour) < self.min_contour_points:
                 continue
             #计算轮廓的最小矩形框，与坐标平行的bbox
-            x, y, w, h = cv2.boundingRect(contour)
+            x, y, w, h = cv2.boundingRect(original_contour)
             #如果这个框的长宽与原图相似，则认为框住了整个图像
-            if w / width > 0.9 and h / height > 0.9: 
+            if w / width > self.frame_ratio_threshold and h / height > self.frame_ratio_threshold: 
                 continue
             #框出原图
-            mask = np.zeros(gray.shape, np.uint8)
-            cut_image = gray[y:y+h, x:x+w]
-            #进行otsu二值化处理，获取分割阈值
-            retval,_ = cv2.threshold(cut_image, 0, 255, self.polar + cv2.THRESH_OTSU)
-            max_thresh = min(int(retval * 1.5), 255)
-            min_thresh = max(int(retval * 0.5), 0)
-            canny_img = cv2.Canny(cut_image, min_thresh, max_thresh)
-            #膨胀腐蚀处理
-            kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-            kernel_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-            canny_img = cv2.dilate(canny_img, kernel_dilate, iterations=1)
-            canny_img = cv2.erode(canny_img, kernel_erode, iterations=1)
-            #贴回原图
-            mask[y:y+h, x:x+w] = canny_img
-            contour, center, theta, shape_wh, bbox, mask = self._get_and_process_contours(mask)
-            if contour is None:
+            temp_mask.fill(0)  # 清空临时mask
+            canny_img = self._process_contour(original_contour, gray, x, y, w, h)
+            temp_mask[y:y+h, x:x+w] = canny_img
+            processed_contour, center, theta, shape_wh, bbox, result_mask = self._get_and_process_contours(temp_mask)
+            if processed_contour is None:
                 continue
-            contours_list.append(contour)
+            contours_list.append(processed_contour)
             center_list.append(center)
             theta_list.append(theta)
             shape_list.append(shape_wh)
             bbox_list.append(bbox)
             #将mask添加到mask_img中,单通道
-            cv2.drawContours(mask_img, [contour], -1, 255, thickness=cv2.FILLED)
+            cv2.drawContours(mask_img, [processed_contour], -1, 255, thickness=cv2.FILLED)
         
-        return contours_list, center_list, theta_list, shape_list, bbox_list, mask_img
+        return {"contours": contours_list, "centers": center_list, "thetas": theta_list, "shapes": shape_list, "bboxes": bbox_list, "mask": mask_img}
