@@ -94,7 +94,8 @@ class EdgeProcessorTool:
             theta = 0.5 * math.atan2(2 * mu11, mu20 - mu02)
         else:
             theta = 0
-
+        #转为角度
+        theta = math.degrees(theta)
         return contour, center, theta, shape_wh, bbox, mask
     
     def _process_contour(self, contour,gray, x, y, w, h):
