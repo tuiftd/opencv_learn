@@ -24,6 +24,9 @@ class GetImageEigenvector:
     def _get_hu_moments(self):
         """获取图像的Hu矩"""
         moments = cv2.moments(self.image)
+        cv2.imshow("image", self.image)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
         hu_moments = cv2.HuMoments(moments).flatten()
         # 对Hu矩进行对数变换
         hu_moments = -np.sign(hu_moments) * np.log10(np.abs(hu_moments) + 1e-7)
@@ -91,18 +94,9 @@ class GetImageEigenvector:
         :param num_points: 要采样的点数
         :return: 均匀采样后的点集 (list of tuples)
         """
-        # 获取轮廓弧长
-        length = cv2.arcLength(contour, closed=True)
+        idx = np.round(np.linspace(0, len(contour) - 1, num_points)).astype(int)
+        return contour[idx, 0, :]
 
-        sampled_points = []
-        for i in range(num_points):
-            # 计算当前采样点在轮廓上的位置（按比例）
-            t = (i / num_points) * length
-            # 插值得到坐标点
-            point = cv2.interpArcLength(contour, t, True)
-            sampled_points.append(tuple(point.astype(int)))
-
-        return sampled_points
     def _get_aspect_ratio(self):
         """获取图像的归一化长宽比"""
         width = self.shape[0]
@@ -120,7 +114,7 @@ class GetImageEigenvector:
         aspect_ratio = self._get_aspect_ratio()
 
         # 合并所有特征描述子
-        feature_vector = np.concatenate((hu_moments, distance_descriptor, angle_descriptor, [aspect_ratio]))
+        feature_vector = np.concatenate((hu_moments, distance_descriptor, angle_descriptor, [aspect_ratio])).astype(np.float32)
         # 重塑为 (1, 69) 形状并确保数据类型为 float
-        feature_vector = feature_vector.reshape(1, -1).astype(np.float32)
+        # feature_vector = feature_vector.reshape(1, -1).astype(np.float32)
         return feature_vector

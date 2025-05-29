@@ -17,7 +17,7 @@ class EdgeProcessorTool:
     OTSU_MULTIPLIER_LOW = 0.5
     DILATE_KERNEL_SIZE = (5, 5)
     ERODE_KERNEL_SIZE = (3, 3)
-    def __init__(self,polar = "light", outer = True):
+    def __init__(self,polar = "light", outer = True,skip_adaptive_threshold=False):
         polar_dict = {
             "light": cv2.THRESH_BINARY,  # 亮于背景
             "dark": cv2.THRESH_BINARY_INV,   # 暗于背景
@@ -26,6 +26,7 @@ class EdgeProcessorTool:
             True: cv2.RETR_EXTERNAL,  # 只返回最外层轮廓
             False: cv2.RETR_LIST,     # 返回所有轮廓
         }
+
         self.polar = polar_dict[polar]
         self.outer = outer_dict[outer]
         self.otsu_multiplier_high = self.OTSU_MULTIPLIER_HIGH 
@@ -37,16 +38,24 @@ class EdgeProcessorTool:
         #初始化膨胀和腐蚀的kernel
         self.kernel_dilate = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.dilate_kernel_size)
         self.kernel_erode = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, self.erode_kernel_size)
+        self.skip_adaptive_threshold = skip_adaptive_threshold
     def _process_to_b(self, image):
         """处理图像到二值图"""
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) 
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image
         #区域自适应阈值处理
+        if self.skip_adaptive_threshold:
+            #如果跳过自适应阈值处理，则直接使用otsu二值化
+            _, binary = cv2.threshold(gray, 0, 255, self.polar + cv2.THRESH_OTSU)
+            return binary, gray
         binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, self.polar, 11, 2)
-        return binary,gray
+        return binary, gray
     
     def _get_and_process_contours(self, canny_img):
         """获取轮廓并处理,返回轮廓，质心,矩方向,最小外接矩形,bbox,填充完毕的mask,理论单目标，只处理最外层轮廓"""
-        contours, _ = cv2.findContours(canny_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        contours, _ = cv2.findContours(canny_img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
         #获取图像宽高
         height, width = canny_img.shape[:2] 
         mask = np.zeros(canny_img.shape, dtype=np.uint8)
