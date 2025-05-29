@@ -27,9 +27,9 @@ def get_eigenvector(image,edge_processor_obj=None):
     mask = np.zeros(gray.shape, dtype=np.uint8)
     for contour in message_dict["contours"]:
         cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
-    cv2.imshow("mask", mask)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # cv2.imshow("mask", mask)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
     moban_dict = {
         "mask": mask,
         "contour": message_dict["contours"][0],  # 只取第一个轮廓

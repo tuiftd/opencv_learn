@@ -24,9 +24,9 @@ class GetImageEigenvector:
     def _get_hu_moments(self):
         """获取图像的Hu矩"""
         moments = cv2.moments(self.image)
-        cv2.imshow("image", self.image)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+        # cv2.imshow("image", self.image)
+        # cv2.waitKey(0)
+        # cv2.destroyAllWindows()
         hu_moments = cv2.HuMoments(moments).flatten()
         # 对Hu矩进行对数变换
         hu_moments = -np.sign(hu_moments) * np.log10(np.abs(hu_moments) + 1e-7)
