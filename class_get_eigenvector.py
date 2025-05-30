@@ -47,8 +47,10 @@ class GetImageEigenvector:
         distance_bins = np.linspace(0, 1, self.DISTANCE_BINS + 1)
         # 计算每个距离落在哪个区间
         distance_histogram, _ = np.histogram(normalized_distances, bins=distance_bins)
+        distance_histogram = distance_histogram.astype(np.float32)
+        normalized_histogram = distance_histogram/num_points
 
-        return distance_histogram
+        return normalized_histogram
 
     def _get_angle_descriptor(self):
         """获取图像的角度描述子"""
@@ -62,7 +64,9 @@ class GetImageEigenvector:
         angle_bins = np.linspace(0, 360, self.THETA_BINS + 1)
         # 计算每个角度落在哪个区间
         angle_histogram, _ = np.histogram(relative_angles, bins=angle_bins)
-        return angle_histogram
+        angle_histogram = angle_histogram.astype(np.float32)
+        normalized_histogram = angle_histogram / num_points
+        return normalized_histogram
     
     def _get_relative_angle(self, sampled_points):
         """从主角度出发，计算每个采样点的相对角度"""
@@ -112,9 +116,19 @@ class GetImageEigenvector:
         distance_descriptor = self._get_distance_descriptor()
         angle_descriptor = self._get_angle_descriptor()
         aspect_ratio = self._get_aspect_ratio()
-
+        # Min-Max归一化到[0,1]范围 - 适合L1距离
+        hu_min, hu_max = hu_moments.min(), hu_moments.max()
+        hu_moments_norm = (hu_moments - hu_min) / (hu_max - hu_min + 1e-7)
+        
+        dist_min, dist_max = distance_descriptor.min(), distance_descriptor.max()
+        distance_descriptor_norm = (distance_descriptor - dist_min) / (dist_max - dist_min + 1e-7)
+        
+        angle_min, angle_max = angle_descriptor.min(), angle_descriptor.max()
+        angle_descriptor_norm = (angle_descriptor - angle_min) / (angle_max - angle_min + 1e-7)
         # 合并所有特征描述子
-        feature_vector = np.concatenate((hu_moments, distance_descriptor, angle_descriptor, [aspect_ratio])).astype(np.float32)
+        # feature_vector = np.concatenate((hu_moments, distance_descriptor, angle_descriptor, [aspect_ratio])).astype(np.float32)
         # 重塑为 (1, 69) 形状并确保数据类型为 float
         # feature_vector = feature_vector.reshape(1, -1).astype(np.float32)
+        feature_vector = np.concatenate((hu_moments_norm, distance_descriptor_norm, 
+                                   angle_descriptor_norm, [aspect_ratio])).astype(np.float32)
         return feature_vector
