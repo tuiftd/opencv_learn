@@ -27,6 +27,7 @@ def get_eigenvector(image,edge_processor_obj=None):
     mask = np.zeros(gray.shape, dtype=np.uint8)
     for contour in message_dict["contours"]:
         cv2.drawContours(mask, [contour], -1, 255, thickness=cv2.FILLED)
+    #  
     # cv2.imshow("mask", mask)
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
@@ -47,11 +48,10 @@ def get_moban_eigenvector(img_dir):
     eigenvectors = []
     labels = []
     for filename in os.listdir(img_dir):
-        if filename.endswith(".jpg") or filename.endswith(".png"):
+        if filename.endswith(".jpg") or filename.endswith(".png") or filename.endswith(".bmp"):
             img_path = os.path.join(img_dir, filename)
             img = cv2.imread(img_path)
             if img is not None:
-                # 使用你的特征提取算法获取特征向量
                 eigenvector = get_eigenvector(img)
                 eigenvectors.append(eigenvector)
                 labels.append(filename)
@@ -59,7 +59,7 @@ def get_moban_eigenvector(img_dir):
 
 def train_knn_classifier(eigenvectors_list, labels_list):
     """训练KNN分类器"""
-    knn = KNN(n_neighbors=1,p=1,weights='distance')  # 你可以根据需要调整k值
+    knn = KNN(n_neighbors=1,p=1,weights='distance') 
     knn.fit(eigenvectors_list, labels_list)
     return knn
 
@@ -120,7 +120,7 @@ def main():
     #     json.dump({"eigenvectors": eigenvectors, "labels": labels}, f)
 
     print("KNN classifier trained")
-    img_path = r"git_me\test5.bmp"
+    img_path = r"git_me/test5.bmp"
     test_image = cv2.imread(img_path)
     # gray = cv2.cvtColor(test_image, cv2.COLOR_BGR2GRAY)
     test_feature_vector = get_eigenvector(test_image, edge_processor_obj=None)

@@ -13,7 +13,7 @@ class EdgeProcessorTool:
     # 类常量
     MIN_CONTOUR_POINTS = 5
     FRAME_RATIO_THRESHOLD = 0.9
-    OTSU_MULTIPLIER_HIGH = 1.5
+    OTSU_MULTIPLIER_HIGH = 1.4
     OTSU_MULTIPLIER_LOW = 0.5
     DILATE_KERNEL_SIZE = (5, 5)
     ERODE_KERNEL_SIZE = (3, 3)
@@ -49,6 +49,9 @@ class EdgeProcessorTool:
         if self.skip_adaptive_threshold:
             #如果跳过自适应阈值处理，则直接使用otsu二值化
             _, binary = cv2.threshold(gray, 0, 255, self.polar + cv2.THRESH_OTSU)
+            # cv2.imshow("binary", binary)
+            # cv2.waitKey(0)
+            # cv2.destroyAllWindows()
             return binary, gray
         binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, self.polar, 11, 2)
         return binary, gray

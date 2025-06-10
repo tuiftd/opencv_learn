@@ -102,7 +102,7 @@ class GetImageEigenvector:
         return contour[idx, 0, :]
 
     def _get_aspect_ratio(self):
-        """获取图像的归一化长宽比"""
+        """获取图像的长宽比"""
         width = self.shape[0]
         height = self.shape[1]
         if width == 0 or height == 0:
